@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Product Barcode Scanner</title>
+    <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+            color: #333;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            width: 100%;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            text-align: center;
+        }
+        
+        header {
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        h1 {
+            color: #1a2a6c;
+            margin-bottom: 10px;
+            font-size: 2.5rem;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 1.1rem;
+        }
+        
+        .scanner-section {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .scanner-container {
+            flex: 1;
+            min-width: 300px;
+            position: relative;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        #interactive {
+            width: 100%;
+            height: 300px;
+            background: #000;
+        }
+        
+        .scan-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+        }
+        
+        .scan-line {
+            width: 80%;
+            height: 3px;
+            background: #fdbb2d;
+            border-radius: 3px;
+            animation: scan 2s infinite linear;
+            box-shadow: 0 0 10px #fdbb2d;
+        }
+        
+        @keyframes scan {
+            0% { transform: translateY(-100px); }
+            100% { transform: translateY(100px); }
+        }
+        
+        .instructions {
+            flex: 1;
+            min-width: 300px;
+            text-align: left;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 10px;
+        }
+        
+        .instructions h3 {
+            color: #1a2a6c;
+            margin-bottom: 15px;
+        }
+        
+        .instructions ol {
+            padding-left: 20px;
+        }
+        
+        .instructions li {
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 50px;
+            background: linear-gradient(to right, #1a2a6c, #b21f1f);
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            background: #aaa;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .result-container {
+            background: #f5f5f5;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            text-align: left;
+        }
+        
+        .result-title {
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            color: #1a2a6c;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .barcode-result {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+        }
+        
+        .barcode-number {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #b21f1f;
+            background: #fff;
+            padding: 10px 15px;
+            border-radius: 5px;
+            border: 2px dashed #fdbb2d;
+        }
+        
+        .barcode-info {
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        .barcode-type {
+            font-weight: bold;
+            color: #1a2a6c;
+        }
+        
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 5px;
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        .status.success {
+            background: rgba(76, 175, 80, 0.2);
+            color: #2e7d32;
+            border: 1px solid #4caf50;
+        }
+        
+        .status.error {
+            background: rgba(244, 67, 54, 0.2);
+            color: #c62828;
+            border: 1px solid #f44336;
+        }
+        
+        .supported-formats {
+            margin-top: 30px;
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        
+        .supported-formats h3 {
+            color: #1a2a6c;
+            margin-bottom: 15px;
+        }
+        
+        .format-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+        
+        .format-badge {
+            background: #1a2a6c;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+        
+        footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 0.9rem;
+            color: white;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px 15px;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+            
+            button {
+                padding: 10px 20px;
+                font-size: 0.9rem;
+            }
+            
+            .barcode-number {
+                font-size: 1.5rem;
+            }
+        }
+        
+        .icon {
+            width: 20px;
+            height: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Product Barcode Scanner</h1>
+            <p class="subtitle">Scan product barcodes (EAN, UPC) to retrieve product information</p>
+        </header>
+        
+        <div class="scanner-section">
+            <div class="scanner-container">
+                <div id="interactive"></div>
+                <div class="scan-overlay">
+                    <div class="scan-line"></div>
+                </div>
+            </div>
+            
+            <div class="instructions">
+                <h3>How to Scan Product Barcodes</h3>
+                <ol>
+                    <li>Click "Start Scanner" to activate your camera</li>
+                    <li>Allow camera access when prompted by your browser</li>
+                    <li>Position the barcode inside the scanner area</li>
+                    <li>Ensure good lighting and hold the barcode steady</li>
+                    <li>The scanner will automatically detect the barcode</li>
+                    <li>View the scanned barcode number and product information</li>
+                </ol>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button id="startButton">
+                <svg class="icon" viewBox="0 0 24 24" fill="white">
+                    <path d="M12 15c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm0-12c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9-4.03-9-9-9z"/>
+                </svg>
+                Start Scanner
+            </button>
+            <button id="stopButton" disabled>
+                <svg class="icon" viewBox="0 0 24 24" fill="white">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/>
+                </svg>
+                Stop Scanner
+            </button>
+        </div>
+        
+        <div class="result-container">
+            <div class="result-title">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="#1a2a6c">
+                    <path d="M14 9h-3c-.55 0-1 .45-1 1v3c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-3c0-.55-.45-1-1-1zm-1 3h-1v-1h1v1zm5-7h-1v1h1c.55 0 1 .45 1 1v1h1v3h-1v2h1v3h-1v1c0 .55-.45 1-1 1h-1v1h-3v-1h-2v1h-3v-1h-1v1c-.55 0-1-.45-1-1v-1H7v-3h1v-2H7V9h1V8H7V7c0-.55.45-1 1-1h1V5h3v1h2V5h3v1h1V5h3v4zm-9 11h2v-1h-2v1zm-4-1h1v-2H7v2zm0-4h1V9H7v2zm8 4h1v-2h-1v2zm0-4h1V9h-1v2zm4 4h1v-2h-1v2zm0-4h1V9h-1v2z"/>
+                </svg>
+                Scan Result
+            </div>
+            <div id="result">
+                <div class="barcode-result">
+                    <div class="barcode-number">No barcode detected</div>
+                    <div class="barcode-info">
+                        <p>Scan a product barcode to see information here.</p>
+                        <p class="barcode-type">Supported formats: EAN-13, EAN-8, UPC-A, UPC-E</p>
+                    </div>
+                </div>
+            </div>
+            <div id="status" class="status"></div>
+        </div>
+        
+        <div class="supported-formats">
+            <h3>Supported Barcode Formats</h3>
+            <div class="format-list">
+                <div class="format-badge">EAN-13 (Most common)</div>
+                <div class="format-badge">EAN-8</div>
+                <div class="format-badge">UPC-A</div>
+                <div class="format-badge">UPC-E</div>
+                <div class="format-badge">Code 128</div>
+                <div class="format-badge">Code 39</div>
+            </div>
+        </div>
+    </div>
+    
+    <footer>
+        <p>Product Barcode Scanner &copy; 2023 | Optimized for product barcodes</p>
+    </footer>
+
+    <script>
+        // DOM elements
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const resultElement = document.getElementById('result');
+        const statusElement = document.getElementById('status');
+        
+        // Variables
+        let scannerActive = false;
+        
+        // Check if the browser supports required APIs
+        function checkCompatibility() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                statusElement.textContent = 'Your browser does not support camera access.';
+                statusElement.className = 'status error';
+                startButton.disabled = true;
+                return false;
+            }
+            
+            if (typeof Quagga === 'undefined') {
+                statusElement.textContent = 'Barcode library failed to load.';
+                statusElement.className = 'status error';
+                return false;
+            }
+            
+            return true;
+        }
+        
+        // Initialize the scanner
+        function initScanner() {
+            if (!checkCompatibility()) return;
+            
+            startButton.addEventListener('click', startScanning);
+            stopButton.addEventListener('click', stopScanning);
+        }
+        
+        // Start the barcode scanner
+        function startScanning() {
+            statusElement.textContent = 'Initializing barcode scanner...';
+            statusElement.className = 'status';
+            
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: document.querySelector('#interactive'),
+                    constraints: {
+                        width: 640,
+                        height: 480,
+                        facingMode: "environment" // Use back camera
+                    }
+                },
+                decoder: {
+                    readers: [
+                        "ean_reader",
+                        "ean_8_reader",
+                        "upc_reader",
+                        "upc_e_reader",
+                        "code_128_reader",
+                        "code_39_reader"
+                    ]
+                },
+                locate: true
+            }, function(err) {
+                if (err) {
+                    console.error(err);
+                    statusElement.textContent = 'Error initializing scanner: ' + err;
+                    statusElement.className = 'status error';
+                    return;
+                }
+                
+                Quagga.start();
+                scannerActive = true;
+                
+                // Update UI
+                startButton.disabled = true;
+                stopButton.disabled = false;
+                statusElement.textContent = 'Scanner active. Point at a product barcode.';
+                statusElement.className = 'status success';
+            });
+            
+            // Process barcode results
+            Quagga.onDetected(function(result) {
+                if (!scannerActive) return;
+                
+                const code = result.codeResult.code;
+                const format = result.codeResult.format;
+                
+                // Display result
+                displayBarcodeResult(code, format);
+                
+                // Optional: Stop after successful scan
+                // stopScanning();
+            });
+        }
+        
+        // Stop the barcode scanner
+        function stopScanning() {
+            if (scannerActive) {
+                Quagga.stop();
+                scannerActive = false;
+            }
+            
+            // Update UI
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            statusElement.textContent = 'Scanner stopped.';
+            statusElement.className = 'status';
+        }
+        
+        // Display the barcode result
+        function displayBarcodeResult(code, format) {
+            // Format the barcode number for display
+            let formattedCode = code;
+            if (format === 'ean_13' && code.length === 13) {
+                formattedCode = code.substring(0, 1) + ' ' + 
+                               code.substring(1, 7) + ' ' + 
+                               code.substring(7, 13);
+            } else if (format === 'upc_a' && code.length === 12) {
+                formattedCode = code.substring(0, 1) + ' ' + 
+                               code.substring(1, 6) + ' ' + 
+                               code.substring(6, 11) + ' ' + 
+                               code.substring(11, 12);
+            }
+            
+            // Format name mapping
+            const formatNames = {
+                'ean_reader': 'EAN-13',
+                'ean_8_reader': 'EAN-8',
+                'upc_reader': 'UPC-A',
+                'upc_e_reader': 'UPC-E',
+                'code_128_reader': 'Code 128',
+                'code_39_reader': 'Code 39'
+            };
+            
+            const formatName = formatNames[format] || format;
+            
+            // Update the result display
+            resultElement.innerHTML = `
+                <div class="barcode-result">
+                    <div class="barcode-number">${formattedCode}</div>
+                    <div class="barcode-info">
+                        <p><strong>Format:</strong> <span class="barcode-type">${formatName}</span></p>
+                        <p><strong>Digits:</strong> ${code.length}</p>
+                        <p><strong>Status:</strong> Valid barcode detected</p>
+                    </div>
+                </div>
+            `;
+            
+            statusElement.textContent = 'Barcode successfully scanned!';
+            statusElement.className = 'status success';
+            
+            // In a real application, you would look up product information here
+            // lookupProductInfo(code);
+        }
+        
+        // Simulate product information lookup (for demonstration)
+        function lookupProductInfo(barcode) {
+            // This would typically call an API to get product details
+            console.log('Looking up product info for barcode:', barcode);
+            
+            // Example API call (commented out as it requires a real API endpoint)
+            /*
+            fetch(`https://api.example.com/products/${barcode}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Display product information
+                    displayProductInfo(data);
+                })
+                .catch(error => {
+                    console.error('Error fetching product info:', error);
+                });
+            */
+        }
+        
+        // Initialize the scanner when the page loads
+        window.addEventListener('load', initScanner);
+    </script>
+</body>
+</html>
