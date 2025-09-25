@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Product Barcode Scanner</title>
-    <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -66,10 +65,11 @@
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
         }
         
-        #interactive {
+        #video {
             width: 100%;
             height: 300px;
             background: #000;
+            object-fit: cover;
         }
         
         .scan-overlay {
@@ -84,18 +84,28 @@
             pointer-events: none;
         }
         
-        .scan-line {
+        .scan-frame {
             width: 80%;
+            height: 150px;
+            border: 3px solid #fdbb2d;
+            border-radius: 10px;
+            background: rgba(253, 187, 45, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .scan-line {
+            width: 100%;
             height: 3px;
             background: #fdbb2d;
-            border-radius: 3px;
+            position: absolute;
             animation: scan 2s infinite linear;
             box-shadow: 0 0 10px #fdbb2d;
         }
         
         @keyframes scan {
-            0% { transform: translateY(-100px); }
-            100% { transform: translateY(100px); }
+            0% { top: 0; }
+            100% { top: 100%; }
         }
         
         .instructions {
@@ -167,6 +177,7 @@
             padding: 20px;
             margin-top: 20px;
             text-align: left;
+            min-height: 150px;
         }
         
         .result-title {
@@ -223,6 +234,12 @@
             background: rgba(244, 67, 54, 0.2);
             color: #c62828;
             border: 1px solid #f44336;
+        }
+        
+        .status.info {
+            background: rgba(33, 150, 243, 0.2);
+            color: #1565c0;
+            border: 1px solid #2196f3;
         }
         
         .supported-formats {
@@ -282,20 +299,34 @@
             width: 20px;
             height: 20px;
         }
+        
+        .test-barcodes {
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        .test-barcodes img {
+            max-width: 200px;
+            margin: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
             <h1>Product Barcode Scanner</h1>
-            <p class="subtitle">Scan product barcodes (EAN, UPC) to retrieve product information</p>
+            <p class="subtitle">Scan product barcodes (EAN, UPC) using your camera</p>
         </header>
         
         <div class="scanner-section">
             <div class="scanner-container">
-                <div id="interactive"></div>
+                <video id="video" playsinline></video>
                 <div class="scan-overlay">
-                    <div class="scan-line"></div>
+                    <div class="scan-frame">
+                        <div class="scan-line"></div>
+                    </div>
                 </div>
             </div>
             
@@ -304,11 +335,12 @@
                 <ol>
                     <li>Click "Start Scanner" to activate your camera</li>
                     <li>Allow camera access when prompted by your browser</li>
-                    <li>Position the barcode inside the scanner area</li>
+                    <li>Position the barcode inside the scanner frame</li>
                     <li>Ensure good lighting and hold the barcode steady</li>
                     <li>The scanner will automatically detect the barcode</li>
-                    <li>View the scanned barcode number and product information</li>
+                    <li>View the scanned barcode number and format</li>
                 </ol>
+                <p><strong>Tip:</strong> Try with the test barcodes below first!</p>
             </div>
         </div>
         
@@ -343,7 +375,18 @@
                     </div>
                 </div>
             </div>
-            <div id="status" class="status"></div>
+            <div id="status" class="status info">
+                Scanner ready. Click "Start Scanner" to begin.
+            </div>
+        </div>
+        
+        <div class="test-barcodes">
+            <h3>Test Barcodes (Try scanning these)</h3>
+            <div>
+                <img src="https://barcode.tec-it.com/barcode.ashx?data=5901234123457&code=EAN13&dpi=96" alt="EAN-13 Test Barcode">
+                <img src="https://barcode.tec-it.com/barcode.ashx?data=12345670&code=EAN8&dpi=96" alt="EAN-8 Test Barcode">
+                <img src="https://barcode.tec-it.com/barcode.ashx?data=123456789012&code=UPCA&dpi=96" alt="UPC-A Test Barcode">
+            </div>
         </div>
         
         <div class="supported-formats">
@@ -360,21 +403,32 @@
     </div>
     
     <footer>
-        <p>Product Barcode Scanner &copy; 2023 | Optimized for product barcodes</p>
+        <p>Product Barcode Scanner &copy; 2023 | Uses modern Barcode Detection API</p>
     </footer>
 
     <script>
         // DOM elements
+        const video = document.getElementById('video');
         const startButton = document.getElementById('startButton');
         const stopButton = document.getElementById('stopButton');
         const resultElement = document.getElementById('result');
         const statusElement = document.getElementById('status');
         
         // Variables
-        let scannerActive = false;
+        let stream = null;
+        let scanning = false;
+        let barcodeDetector = null;
         
-        // Check if the browser supports required APIs
-        function checkCompatibility() {
+        // Check if the browser supports Barcode Detection API
+        async function checkCompatibility() {
+            if (!('BarcodeDetector' in window)) {
+                statusElement.textContent = 'Your browser does not support the Barcode Detection API. Try using Chrome or Edge.';
+                statusElement.className = 'status error';
+                startButton.disabled = true;
+                return false;
+            }
+            
+            // Check if we can get camera access
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 statusElement.textContent = 'Your browser does not support camera access.';
                 statusElement.className = 'status error';
@@ -382,95 +436,116 @@
                 return false;
             }
             
-            if (typeof Quagga === 'undefined') {
-                statusElement.textContent = 'Barcode library failed to load.';
+            // Initialize barcode detector
+            try {
+                // Get supported formats
+                const formats = await BarcodeDetector.getSupportedFormats();
+                console.log('Supported barcode formats:', formats);
+                
+                if (formats.length === 0) {
+                    statusElement.textContent = 'No barcode formats supported by your browser.';
+                    statusElement.className = 'status error';
+                    return false;
+                }
+                
+                barcodeDetector = new BarcodeDetector({ formats });
+                statusElement.textContent = `Barcode detector ready. Supported formats: ${formats.join(', ')}`;
+                statusElement.className = 'status info';
+                return true;
+            } catch (error) {
+                console.error('Error initializing barcode detector:', error);
+                statusElement.textContent = 'Error initializing barcode detector.';
                 statusElement.className = 'status error';
                 return false;
             }
-            
-            return true;
         }
         
         // Initialize the scanner
-        function initScanner() {
-            if (!checkCompatibility()) return;
+        async function initScanner() {
+            if (!await checkCompatibility()) return;
             
             startButton.addEventListener('click', startScanning);
             stopButton.addEventListener('click', stopScanning);
         }
         
-        // Start the barcode scanner
-        function startScanning() {
-            statusElement.textContent = 'Initializing barcode scanner...';
-            statusElement.className = 'status';
-            
-            Quagga.init({
-                inputStream: {
-                    name: "Live",
-                    type: "LiveStream",
-                    target: document.querySelector('#interactive'),
-                    constraints: {
-                        width: 640,
-                        height: 480,
-                        facingMode: "environment" // Use back camera
-                    }
-                },
-                decoder: {
-                    readers: [
-                        "ean_reader",
-                        "ean_8_reader",
-                        "upc_reader",
-                        "upc_e_reader",
-                        "code_128_reader",
-                        "code_39_reader"
-                    ]
-                },
-                locate: true
-            }, function(err) {
-                if (err) {
-                    console.error(err);
-                    statusElement.textContent = 'Error initializing scanner: ' + err;
-                    statusElement.className = 'status error';
-                    return;
-                }
+        // Start the camera and scanning process
+        async function startScanning() {
+            try {
+                statusElement.textContent = 'Requesting camera access...';
+                statusElement.className = 'status info';
                 
-                Quagga.start();
-                scannerActive = true;
+                // Get camera stream
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        facingMode: 'environment', // Prefer back camera
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                });
+                
+                video.srcObject = stream;
+                video.setAttribute('playsinline', true);
+                await video.play();
                 
                 // Update UI
                 startButton.disabled = true;
                 stopButton.disabled = false;
-                statusElement.textContent = 'Scanner active. Point at a product barcode.';
+                statusElement.textContent = 'Camera active. Point at a barcode.';
                 statusElement.className = 'status success';
-            });
-            
-            // Process barcode results
-            Quagga.onDetected(function(result) {
-                if (!scannerActive) return;
                 
-                const code = result.codeResult.code;
-                const format = result.codeResult.format;
-                
-                // Display result
-                displayBarcodeResult(code, format);
-                
-                // Optional: Stop after successful scan
-                // stopScanning();
-            });
+                // Start scanning loop
+                scanning = true;
+                scanFrame();
+            } catch (error) {
+                console.error('Error starting camera:', error);
+                statusElement.textContent = 'Error accessing camera: ' + error.message;
+                statusElement.className = 'status error';
+            }
         }
         
-        // Stop the barcode scanner
+        // Stop the camera and scanning
         function stopScanning() {
-            if (scannerActive) {
-                Quagga.stop();
-                scannerActive = false;
+            scanning = false;
+            
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
             }
+            
+            video.srcObject = null;
             
             // Update UI
             startButton.disabled = false;
             stopButton.disabled = true;
             statusElement.textContent = 'Scanner stopped.';
-            statusElement.className = 'status';
+            statusElement.className = 'status info';
+        }
+        
+        // Scan for barcodes in the current video frame
+        async function scanFrame() {
+            if (!scanning || !barcodeDetector) return;
+            
+            try {
+                const barcodes = await barcodeDetector.detect(video);
+                
+                if (barcodes.length > 0) {
+                    // Use the first detected barcode
+                    const barcode = barcodes[0];
+                    displayBarcodeResult(barcode.rawValue, barcode.format);
+                } else {
+                    statusElement.textContent = 'No barcode detected. Try adjusting position or lighting.';
+                    statusElement.className = 'status info';
+                }
+            } catch (error) {
+                console.error('Error detecting barcode:', error);
+                statusElement.textContent = 'Error detecting barcode.';
+                statusElement.className = 'status error';
+            }
+            
+            // Continue scanning
+            if (scanning) {
+                setTimeout(scanFrame, 500); // Check every 500ms to reduce CPU usage
+            }
         }
         
         // Display the barcode result
@@ -490,12 +565,13 @@
             
             // Format name mapping
             const formatNames = {
-                'ean_reader': 'EAN-13',
-                'ean_8_reader': 'EAN-8',
-                'upc_reader': 'UPC-A',
-                'upc_e_reader': 'UPC-E',
-                'code_128_reader': 'Code 128',
-                'code_39_reader': 'Code 39'
+                'ean_13': 'EAN-13',
+                'ean_8': 'EAN-8',
+                'upc_a': 'UPC-A',
+                'upc_e': 'UPC-E',
+                'code_128': 'Code 128',
+                'code_39': 'Code 39',
+                'qr_code': 'QR Code'
             };
             
             const formatName = formatNames[format] || format;
@@ -516,7 +592,7 @@
             statusElement.className = 'status success';
             
             // In a real application, you would look up product information here
-            // lookupProductInfo(code);
+            lookupProductInfo(code);
         }
         
         // Simulate product information lookup (for demonstration)
@@ -524,12 +600,11 @@
             // This would typically call an API to get product details
             console.log('Looking up product info for barcode:', barcode);
             
-            // Example API call (commented out as it requires a real API endpoint)
+            // Example of what you might do with a real API:
             /*
             fetch(`https://api.example.com/products/${barcode}`)
                 .then(response => response.json())
                 .then(data => {
-                    // Display product information
                     displayProductInfo(data);
                 })
                 .catch(error => {
