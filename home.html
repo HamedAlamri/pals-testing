@@ -6,6 +6,7 @@
     <title>Product Barcode Scanner</title>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -254,6 +255,12 @@
             border: 1px solid #ff9800;
         }
         
+        .status.ocr {
+            background: rgba(156, 39, 176, 0.2);
+            color: #7b1fa2;
+            border: 1px solid #9c27b0;
+        }
+        
         .supported-formats {
             margin-top: 30px;
             background: #f9f9f9;
@@ -359,6 +366,28 @@
             50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
+        
+        .ocr-section {
+            margin-top: 15px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 5px;
+            display: none;
+        }
+        
+        .ocr-result {
+            font-family: monospace;
+            background: white;
+            padding: 5px;
+            border-radius: 3px;
+            margin-top: 5px;
+        }
+        
+        .format-detection {
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -435,6 +464,11 @@
                 <div class="verification-dot"></div>
                 <div class="verification-dot"></div>
             </div>
+            <div id="ocrSection" class="ocr-section">
+                <strong>OCR Verification:</strong> 
+                <div id="ocrResult" class="ocr-result">Reading digits below barcode...</div>
+            </div>
+            <div id="formatDetection" class="format-detection"></div>
             <div id="status" class="status info">
                 Scanner ready. Click "Start Scanner" to begin.
             </div>
@@ -466,7 +500,6 @@
     <!-- this for sound -->
     <audio id="scanSound" preload="auto">
         <source src="sound.mp3" type="audio/mpeg">
-        <source src="sound.ogg" type="audio/ogg">
     </audio>
 
     <footer>
@@ -485,6 +518,9 @@
         const verificationIndicator = document.getElementById('verificationIndicator');
         const verificationDots = document.querySelectorAll('.verification-dot');
         const testBarcodeImages = document.querySelectorAll('.test-barcodes img');
+        const ocrSection = document.getElementById('ocrSection');
+        const ocrResult = document.getElementById('ocrResult');
+        const formatDetection = document.getElementById('formatDetection');
 
         // sound element
         const scanSound = document.getElementById('scanSound');
@@ -498,9 +534,137 @@
         
         // Barcode verification variables
         let lastDetectedCode = null;
+        let lastDetectedFormat = null;
         let verificationCount = 0;
         const REQUIRED_VERIFICATIONS = 3; // Number of times the same code must be detected
         let verificationTimeout = null;
+        
+        // Enhanced barcode format detection
+        function detectBarcodeFormat(code) {
+            // Remove any non-digit characters
+            const digits = code.replace(/\D/g, '');
+            const length = digits.length;
+            
+            // EAN-13: 13 digits, starts with appropriate prefix
+            if (length === 13) {
+                // Check if it's a valid EAN-13 (first digits indicate country/type)
+                const firstDigits = digits.substring(0, 3);
+                const validPrefixes = ['000', '001', '002', '003', '004', '005', '006', '007', '008', '009', 
+                                      '010', '011', '012', '013', '014', '015', '016', '017', '018', '019',
+                                      '020', '021', '022', '023', '024', '025', '026', '027', '028', '029',
+                                      '030', '031', '032', '033', '034', '035', '036', '037', '038', '039',
+                                      '040', '041', '042', '043', '044', '045', '046', '047', '048', '049',
+                                      '050', '051', '052', '053', '054', '055', '056', '057', '058', '059',
+                                      '060', '061', '062', '063', '064', '065', '066', '067', '068', '069',
+                                      '070', '071', '072', '073', '074', '075', '076', '077', '078', '079',
+                                      '080', '081', '082', '083', '084', '085', '086', '087', '088', '089',
+                                      '090', '091', '092', '093', '094', '095', '096', '097', '098', '099',
+                                      '100', '101', '102', '103', '104', '105', '106', '107', '108', '109',
+                                      '110', '111', '112', '113', '114', '115', '116', '117', '118', '119',
+                                      '120', '121', '122', '123', '124', '125', '126', '127', '128', '129',
+                                      '130', '131', '132', '133', '134', '135', '136', '137', '138', '139',
+                                      '200', '201', '202', '203', '204', '205', '206', '207', '208', '209',
+                                      '300', '301', '302', '303', '304', '305', '306', '307', '308', '309',
+                                      '400', '401', '402', '403', '404', '405', '406', '407', '408', '409',
+                                      '500', '501', '502', '503', '504', '505', '506', '507', '508', '509',
+                                      '600', '601', '602', '603', '604', '605', '606', '607', '608', '609',
+                                      '700', '701', '702', '703', '704', '705', '706', '707', '708', '709',
+                                      '800', '801', '802', '803', '804', '805', '806', '807', '808', '809',
+                                      '900', '901', '902', '903', '904', '905', '906', '907', '908', '909'];
+                
+                if (validPrefixes.includes(firstDigits) || 
+                    (parseInt(firstDigits) >= 200 && parseInt(firstDigits) <= 299) || // Restricted circulation
+                    (parseInt(firstDigits) >= 300 && parseInt(firstDigits) <= 379) || // France and Monaco
+                    (parseInt(firstDigits) >= 380 && parseInt(firstDigits) <= 389) || // Bulgaria
+                    (parseInt(firstDigits) >= 400 && parseInt(firstDigits) <= 440) || // Germany
+                    (parseInt(firstDigits) >= 450 && parseInt(firstDigits) <= 459) || // Japan
+                    (parseInt(firstDigits) >= 460 && parseInt(firstDigits) <= 469) || // Russia
+                    (parseInt(firstDigits) >= 490 && parseInt(firstDigits) <= 499) || // Japan
+                    (parseInt(firstDigits) >= 500 && parseInt(firstDigits) <= 509) || // UK
+                    (parseInt(firstDigits) >= 540 && parseInt(firstDigits) <= 549) || // Belgium and Luxembourg
+                    (parseInt(firstDigits) >= 570 && parseInt(firstDigits) <= 579) || // Denmark
+                    (parseInt(firstDigits) >= 600 && parseInt(firstDigits) <= 601) || // South Africa
+                    (parseInt(firstDigits) >= 640 && parseInt(firstDigits) <= 649) || // Finland
+                    (parseInt(firstDigits) >= 690 && parseInt(firstDigits) <= 695) || // China
+                    (parseInt(firstDigits) >= 700 && parseInt(firstDigits) <= 709) || // Norway
+                    (parseInt(firstDigits) >= 729 && parseInt(firstDigits) <= 729) || // Israel
+                    (parseInt(firstDigits) >= 730 && parseInt(firstDigits) <= 739) || // Sweden
+                    (parseInt(firstDigits) >= 740 && parseInt(firstDigits) <= 749) || // Guatemala
+                    (parseInt(firstDigits) >= 750 && parseInt(firstDigits) <= 759) || // Mexico
+                    (parseInt(firstDigits) >= 760 && parseInt(firstDigits) <= 769) || // Switzerland
+                    (parseInt(firstDigits) >= 770 && parseInt(firstDigits) <= 771) || // Colombia
+                    (parseInt(firstDigits) >= 773 && parseInt(firstDigits) <= 773) || // Uruguay
+                    (parseInt(firstDigits) >= 775 && parseInt(firstDigits) <= 775) || // Peru
+                    (parseInt(firstDigits) >= 777 && parseInt(firstDigits) <= 777) || // Bolivia
+                    (parseInt(firstDigits) >= 779 && parseInt(firstDigits) <= 779) || // Argentina
+                    (parseInt(firstDigits) >= 780 && parseInt(firstDigits) <= 780) || // Chile
+                    (parseInt(firstDigits) >= 784 && parseInt(firstDigits) <= 784) || // Paraguay
+                    (parseInt(firstDigits) >= 786 && parseInt(firstDigits) <= 786) || // Ecuador
+                    (parseInt(firstDigits) >= 789 && parseInt(firstDigits) <= 790) || // Brazil
+                    (parseInt(firstDigits) >= 800 && parseInt(firstDigits) <= 839) || // Italy
+                    (parseInt(firstDigits) >= 840 && parseInt(firstDigits) <= 849) || // Spain
+                    (parseInt(firstDigits) >= 850 && parseInt(firstDigits) <= 850) || // Cuba
+                    (parseInt(firstDigits) >= 858 && parseInt(firstDigits) <= 858) || // Slovakia
+                    (parseInt(firstDigits) >= 859 && parseInt(firstDigits) <= 859) || // Czech Republic
+                    (parseInt(firstDigits) >= 860 && parseInt(firstDigits) <= 860) || // Yugoslavia
+                    (parseInt(firstDigits) >= 867 && parseInt(firstDigits) <= 867) || // North Korea
+                    (parseInt(firstDigits) >= 868 && parseInt(firstDigits) <= 869) || // Turkey
+                    (parseInt(firstDigits) >= 870 && parseInt(firstDigits) <= 879) || // Netherlands
+                    (parseInt(firstDigits) >= 880 && parseInt(firstDigits) <= 880) || // South Korea
+                    (parseInt(firstDigits) >= 884 && parseInt(firstDigits) <= 884) || // Cambodia
+                    (parseInt(firstDigits) >= 885 && parseInt(firstDigits) <= 885) || // Thailand
+                    (parseInt(firstDigits) >= 888 && parseInt(firstDigits) <= 888) || // Singapore
+                    (parseInt(firstDigits) >= 890 && parseInt(firstDigits) <= 890) || // India
+                    (parseInt(firstDigits) >= 893 && parseInt(firstDigits) <= 893) || // Vietnam
+                    (parseInt(firstDigits) >= 896 && parseInt(firstDigits) <= 896) || // Pakistan
+                    (parseInt(firstDigits) >= 899 && parseInt(firstDigits) <= 899) || // Indonesia
+                    (parseInt(firstDigits) >= 900 && parseInt(firstDigits) <= 919) || // Austria
+                    (parseInt(firstDigits) >= 930 && parseInt(firstDigits) <= 939) || // Australia
+                    (parseInt(firstDigits) >= 940 && parseInt(firstDigits) <= 949) || // New Zealand
+                    (parseInt(firstDigits) >= 950 && parseInt(firstDigits) <= 950) || // EAN International
+                    (parseInt(firstDigits) >= 955 && parseInt(firstDigits) <= 955) || // Malaysia
+                    (parseInt(firstDigits) >= 958 && parseInt(firstDigits) <= 958)) { // Macau
+                    return 'EAN-13';
+                }
+                return 'Code-13'; // Fallback for 13-digit codes
+            }
+            
+            // EAN-8: 8 digits
+            if (length === 8) {
+                return 'EAN-8';
+            }
+            
+            // UPC-A: 12 digits
+            if (length === 12) {
+                // UPC-A codes typically start with specific digits
+                const firstDigit = digits.charAt(0);
+                if (['0', '1', '2', '3', '4', '5', '6', '7'].includes(firstDigit)) {
+                    return 'UPC-A';
+                }
+                return 'Code-12'; // Fallback for 12-digit codes
+            }
+            
+            // UPC-E: 6, 7, or 8 digits (compressed UPC-A)
+            if (length === 6 || length === 7 || length === 8) {
+                // Check if it could be a compressed UPC-A
+                if (digits.match(/^[0-9]{6,8}$/)) {
+                    return 'UPC-E';
+                }
+            }
+            
+            // Code 128: Variable length, but commonly used for product codes
+            if (length >= 10 && length <= 20) {
+                return 'Code-128';
+            }
+            
+            // Code 39: Variable length, alphanumeric
+            if (code.match(/^[A-Z0-9\-\$\%\.\+\/ ]+$/) && length >= 5) {
+                return 'Code-39';
+            }
+            
+            // Default fallback
+            return `Code-${length}`;
+        }
         
         // Check compatibility and initialize
         function initScanner() {
@@ -524,7 +688,7 @@
             }
             // Fallback to jsQR for QR codes (will try to detect barcodes too)
             else if (typeof jsQR !== 'undefined') {
-                detectionMethod = 'jsqr';
+                detectionMethod = 'jsQR';
                 statusElement.textContent = 'Using QR code detection (limited barcode support)';
             } else {
                 statusElement.textContent = 'No barcode detection library available.';
@@ -543,7 +707,8 @@
                 img.addEventListener('click', function() {
                     const code = this.getAttribute('data-code');
                     const format = this.getAttribute('data-format');
-                    handleVerifiedBarcode(code, format);
+                    // Skip OCR for test barcodes
+                    handleVerifiedBarcode(code, format, true);
                 });
             });
             
@@ -673,9 +838,12 @@
         // Reset verification state
         function resetVerification() {
             lastDetectedCode = null;
+            lastDetectedFormat = null;
             verificationCount = 0;
             verificationIndicator.style.display = 'none';
             verificationDots.forEach(dot => dot.classList.remove('active'));
+            ocrSection.style.display = 'none';
+            formatDetection.textContent = '';
         }
         
         // Native BarcodeDetector API method
@@ -691,7 +859,9 @@
                         const barcodes = await barcodeDetector.detect(video);
                         if (barcodes.length > 0) {
                             const barcode = barcodes[0];
-                            handleBarcodeDetection(barcode.rawValue, barcode.format);
+                            // Use detected format or fallback to our detection
+                            const detectedFormat = barcode.format || detectBarcodeFormat(barcode.rawValue);
+                            handleBarcodeDetection(barcode.rawValue, detectedFormat);
                         }
                     } catch (error) {
                         console.error('Native detection error:', error);
@@ -744,8 +914,8 @@
                     if (!scanning) return;
                     
                     const code = result.codeResult.code;
-                    const format = result.codeResult.format;
-                    handleBarcodeDetection(code, format);
+                    const detectedFormat = detectBarcodeFormat(code);
+                    handleBarcodeDetection(code, detectedFormat);
                 });
             });
         }
@@ -768,16 +938,22 @@
                 });
                 
                 if (code) {
-                    handleBarcodeDetection(code.data, "QR Code");
+                    const detectedFormat = detectBarcodeFormat(code.data);
+                    handleBarcodeDetection(code.data, detectedFormat);
                 }
             }, 300);
         }
         
         // Handle barcode detection with verification
         function handleBarcodeDetection(code, format) {
-            // If this is the first detection or a different code
-            if (lastDetectedCode !== code) {
+            // Enhanced format detection for better accuracy
+            const enhancedFormat = detectBarcodeFormat(code);
+            formatDetection.textContent = `Detected as: ${enhancedFormat}`;
+            
+            // If this is the first detection or a different code/format
+            if (lastDetectedCode !== code || lastDetectedFormat !== enhancedFormat) {
                 lastDetectedCode = code;
+                lastDetectedFormat = enhancedFormat;
                 verificationCount = 1;
                 verificationIndicator.style.display = 'flex';
                 verificationDots[0].classList.add('active');
@@ -800,7 +976,7 @@
                 return;
             }
             
-            // Same code detected again
+            // Same code and format detected again
             verificationCount++;
             
             // Update verification indicator
@@ -821,13 +997,92 @@
                     verificationTimeout = null;
                 }
                 
-                // Handle the verified barcode
-                handleVerifiedBarcode(code, format);
+                // Start OCR verification
+                startOCRVerification(code, enhancedFormat);
             }
         }
         
-        // Handle a verified barcode (confirmed after multiple detections)
-        function handleVerifiedBarcode(code, format) {
+        // Start OCR verification of digits below barcode
+        async function startOCRVerification(code, format) {
+            statusElement.textContent = 'Verifying digits below barcode...';
+            statusElement.className = 'status ocr';
+            ocrSection.style.display = 'block';
+            ocrResult.textContent = 'Processing...';
+            
+            try {
+                // Capture current frame for OCR
+                const canvasContext = canvas.getContext('2d');
+                canvasContext.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                // Extract region below the barcode (approximate position)
+                const barcodeRegion = extractBarcodeTextRegion(canvasContext, canvas.width, canvas.height);
+                
+                if (!barcodeRegion) {
+                    ocrResult.textContent = 'Could not extract text region';
+                    // Continue without OCR verification
+                    handleVerifiedBarcode(code, format, false);
+                    return;
+                }
+                
+                // Use Tesseract.js for OCR
+                const worker = await Tesseract.createWorker('eng');
+                await worker.recognize(barcodeRegion).then(({ data: { text } }) => {
+                    ocrResult.textContent = `Detected: "${text.trim()}"`;
+                    
+                    // Extract numbers from OCR result
+                    const extractedNumbers = text.replace(/\D/g, '');
+                    
+                    // Check if the barcode digits match the OCR result
+                    const codeDigits = code.replace(/\D/g, '');
+                    const ocrMatches = extractedNumbers.includes(codeDigits) || codeDigits.includes(extractedNumbers);
+                    
+                    if (ocrMatches && extractedNumbers.length >= 3) {
+                        ocrResult.textContent += ' ✓ MATCH';
+                        handleVerifiedBarcode(code, format, true);
+                    } else {
+                        ocrResult.textContent += ' ✗ NO MATCH (using barcode only)';
+                        // Still accept the barcode but note the OCR mismatch
+                        handleVerifiedBarcode(code, format, false);
+                    }
+                });
+                
+                await worker.terminate();
+                
+            } catch (error) {
+                console.error('OCR error:', error);
+                ocrResult.textContent = 'OCR failed (using barcode only)';
+                // Continue without OCR verification
+                handleVerifiedBarcode(code, format, false);
+            }
+        }
+        
+        // Extract region below barcode for OCR
+        function extractBarcodeTextRegion(ctx, width, height) {
+            // Create a new canvas for the text region below the barcode
+            const textCanvas = document.createElement('canvas');
+            const textCtx = textCanvas.getContext('2d');
+            
+            // Estimate barcode position (middle of frame)
+            const barcodeHeight = 100; // Approximate barcode height
+            const textRegionY = height / 2 + barcodeHeight / 2 + 10; // Start below barcode
+            const textRegionHeight = 50; // Height of text region
+            
+            // Set dimensions
+            textCanvas.width = width;
+            textCanvas.height = textRegionHeight;
+            
+            // Extract the region below the barcode
+            textCtx.drawImage(
+                ctx.canvas, 
+                0, textRegionY, width, textRegionHeight,
+                0, 0, width, textRegionHeight
+            );
+            
+            return textCanvas;
+        }
+        
+        // Handle a verified barcode (confirmed after multiple detections and optional OCR)
+        function handleVerifiedBarcode(code, format, ocrVerified = false) {
             // Stop scanning
             scanning = false;
             if (scanInterval) {
@@ -843,11 +1098,16 @@
             // Update UI
             stopButton.disabled = true;
             scanAnotherButton.disabled = false;
-            statusElement.textContent = 'Barcode successfully scanned and verified!';
+            
+            if (ocrVerified) {
+                statusElement.textContent = 'Barcode successfully scanned and verified with OCR!';
+            } else {
+                statusElement.textContent = 'Barcode successfully scanned!';
+            }
             statusElement.className = 'status success';
             
             // Display result with animation
-            displayBarcodeResult(code, format);
+            displayBarcodeResult(code, format, ocrVerified);
             
             // Add visual feedback
             resultElement.classList.add('pulse');
@@ -863,7 +1123,7 @@
         }
         
         // Display the barcode result
-        function displayBarcodeResult(code, format) {
+        function displayBarcodeResult(code, format, ocrVerified = false) {
             // Format the barcode number for display
             let formattedCode = code;
             if (format.includes('ean_13') && code.length === 13) {
@@ -875,9 +1135,11 @@
                                code.substring(1, 6) + ' ' + 
                                code.substring(6, 11) + ' ' + 
                                code.substring(11, 12);
+            } else if (format.includes('ean_8') && code.length === 8) {
+                formattedCode = code.substring(0, 4) + ' ' + code.substring(4, 8);
             }
             
-            // Format name mapping
+            // Format name mapping for better display
             const formatNames = {
                 'ean_13': 'EAN-13',
                 'ean_8': 'EAN-8',
@@ -885,7 +1147,11 @@
                 'upc_e': 'UPC-E',
                 'code_128': 'Code 128',
                 'code_39': 'Code 39',
-                'qr_code': 'QR Code'
+                'qr_code': 'QR Code',
+                'EAN-13': 'EAN-13',
+                'EAN-8': 'EAN-8',
+                'UPC-A': 'UPC-A',
+                'UPC-E': 'UPC-E'
             };
             
             const formatName = formatNames[format] || format;
@@ -896,8 +1162,8 @@
                     <div class="barcode-number">${formattedCode}</div>
                     <div class="barcode-info">
                         <p><strong>Format:</strong> <span class="barcode-type">${formatName}</span></p>
-                        <p><strong>Digits:</strong> ${code.length}</p>
-                        <p><strong>Status:</strong> Valid barcode detected</p>
+                        <p><strong>Digits:</strong> ${code.replace(/\D/g, '').length}</p>
+                        <p><strong>Status:</strong> Valid barcode detected ${ocrVerified ? '(OCR Verified)' : ''}</p>
                     </div>
                 </div>
             `;
