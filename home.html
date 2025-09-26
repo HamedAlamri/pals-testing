@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QR/Barcode Scanner with Sound</title>
+    <title>Product Barcode Scanner</title>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -322,76 +323,13 @@
             transform: scale(1.05);
             transition: transform 0.3s;
         }
-        
-        .sound-toggle {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            margin-top: 15px;
-        }
-        
-        .switch {
-            position: relative;
-            display: inline-block;
-            width: 60px;
-            height: 34px;
-        }
-        
-        .switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-        
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #ccc;
-            transition: .4s;
-            border-radius: 34px;
-        }
-        
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 26px;
-            width: 26px;
-            left: 4px;
-            bottom: 4px;
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%;
-        }
-        
-        input:checked + .slider {
-            background-color: #1a2a6c;
-        }
-        
-        input:checked + .slider:before {
-            transform: translateX(26px);
-        }
-        
-        .pulse {
-            animation: pulse 0.5s ease-in-out;
-        }
-        
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-        }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>QR/Barcode Scanner with Sound</h1>
-            <p class="subtitle">Scanner stops automatically and plays sound when code is detected</p>
+            <h1>Product Barcode Scanner</h1>
+            <p class="subtitle">Scan product barcodes (EAN, UPC) using your camera</p>
         </header>
         
         <div class="scanner-section">
@@ -406,24 +344,16 @@
             </div>
             
             <div class="instructions">
-                <h3>How to Use</h3>
+                <h3>How to Scan Product Barcodes</h3>
                 <ol>
                     <li>Click "Start Scanner" to activate your camera</li>
-                    <li>Allow camera access when prompted</li>
+                    <li>Allow camera access when prompted by your browser</li>
                     <li>Position the barcode inside the scanner frame</li>
-                    <li>Scanner will automatically stop and play a sound when code is detected</li>
-                    <li>Click "Start Scanner" again to scan another code</li>
+                    <li>Ensure good lighting and hold the barcode steady</li>
+                    <li>The scanner will automatically detect the barcode</li>
+                    <li>View the scanned barcode number and format</li>
                 </ol>
                 <p><strong>Tip:</strong> Click on the test barcodes below to simulate scanning!</p>
-                
-                <div class="sound-toggle">
-                    <span>Scan Sound:</span>
-                    <label class="switch">
-                        <input type="checkbox" id="soundToggle" checked>
-                        <span class="slider"></span>
-                    </label>
-                    <span id="soundStatus">On</span>
-                </div>
             </div>
         </div>
         
@@ -440,12 +370,6 @@
                 </svg>
                 Stop Scanner
             </button>
-            <button id="resumeButton" disabled>
-                <svg class="icon" viewBox="0 0 24 24" fill="white">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
-                </svg>
-                Scan Another
-            </button>
         </div>
         
         <div class="result-container">
@@ -457,10 +381,10 @@
             </div>
             <div id="result">
                 <div class="barcode-result">
-                    <div class="barcode-number">No code detected yet</div>
+                    <div class="barcode-number">No barcode detected</div>
                     <div class="barcode-info">
-                        <p>Scan a QR code or barcode to see information here.</p>
-                        <p class="barcode-type">The scanner will automatically stop after detection.</p>
+                        <p>Scan a product barcode to see information here.</p>
+                        <p class="barcode-type">Supported formats: EAN-13, EAN-8, UPC-A, UPC-E</p>
                     </div>
                 </div>
             </div>
@@ -470,34 +394,36 @@
         </div>
         
         <div class="test-barcodes">
-            <h3>Test Codes (Click to simulate scanning)</h3>
+            <h3>Test Barcodes (Click to simulate scanning)</h3>
             <div>
                 <img src="https://barcode.tec-it.com/barcode.ashx?data=5901234123457&code=EAN13&dpi=96" alt="EAN-13 Test Barcode" data-code="5901234123457" data-format="EAN-13">
                 <img src="https://barcode.tec-it.com/barcode.ashx?data=12345670&code=EAN8&dpi=96" alt="EAN-8 Test Barcode" data-code="12345670" data-format="EAN-8">
-                <img src="https://barcode.tec-it.com/barcode.ashx?data=HelloWorld&code=QRCode&dpi=96" alt="QR Code Test" data-code="HelloWorld" data-format="QR Code">
+                <img src="https://barcode.tec-it.com/barcode.ashx?data=123456789012&code=UPCA&dpi=96" alt="UPC-A Test Barcode" data-code="123456789012" data-format="UPC-A">
             </div>
         </div>
         
         <div class="supported-formats">
-            <h3>Supported Code Formats</h3>
+            <h3>Supported Barcode Formats</h3>
             <div class="format-list">
-                <div class="format-badge">QR Codes</div>
-                <div class="format-badge">EAN-13</div>
+                <div class="format-badge">EAN-13 (Most common)</div>
                 <div class="format-badge">EAN-8</div>
                 <div class="format-badge">UPC-A</div>
+                <div class="format-badge">UPC-E</div>
                 <div class="format-badge">Code 128</div>
+                <div class="format-badge">Code 39</div>
             </div>
         </div>
     </div>
     
-    <footer>
-        <p>QR/Barcode Scanner with Sound &copy; 2023 | Automatically stops on detection</p>
-    </footer>
 
-    <!-- Hidden audio element for scan sound -->
+    <!-- this for sound -->
     <audio id="scanSound" preload="auto">
         <source src="https://assets.mixkit.co/sfx/preview/mixkit-confirmation-tone-2867.mp3" type="audio/mpeg">
     </audio>
+
+    <footer>
+        <p>Product Barcode Scanner &copy; 2023 | Uses multiple detection methods for better compatibility</p>
+    </footer>
 
     <script>
         // DOM elements
@@ -505,21 +431,21 @@
         const canvas = document.getElementById('canvas');
         const startButton = document.getElementById('startButton');
         const stopButton = document.getElementById('stopButton');
-        const resumeButton = document.getElementById('resumeButton');
         const resultElement = document.getElementById('result');
         const statusElement = document.getElementById('status');
         const testBarcodeImages = document.querySelectorAll('.test-barcodes img');
-        const soundToggle = document.getElementById('soundToggle');
-        const soundStatus = document.getElementById('soundStatus');
+
+        // sound element
         const scanSound = document.getElementById('scanSound');
+
         
         // Variables
         let stream = null;
         let scanning = false;
         let scanInterval = null;
-        let soundEnabled = true;
+        let detectionMethod = 'jsqr'; // Default method
         
-        // Initialize the scanner
+        // Check compatibility and initialize
         function initScanner() {
             // Check camera access
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -529,9 +455,22 @@
                 return;
             }
             
-            // Check for jsQR library
-            if (typeof jsQR === 'undefined') {
-                statusElement.textContent = 'QR code library failed to load.';
+            // Check for BarcodeDetector API (most modern method)
+            if ('BarcodeDetector' in window) {
+                detectionMethod = 'native';
+                statusElement.textContent = 'Using modern Barcode Detection API';
+            } 
+            // Check for Quagga library
+            else if (typeof Quagga !== 'undefined') {
+                detectionMethod = 'quagga';
+                statusElement.textContent = 'Using Quagga barcode library';
+            }
+            // Fallback to jsQR for QR codes (will try to detect barcodes too)
+            else if (typeof jsQR !== 'undefined') {
+                detectionMethod = 'jsqr';
+                statusElement.textContent = 'Using QR code detection (limited barcode support)';
+            } else {
+                statusElement.textContent = 'No barcode detection library available.';
                 statusElement.className = 'status error';
                 startButton.disabled = true;
                 return;
@@ -540,20 +479,15 @@
             // Add event listeners
             startButton.addEventListener('click', startScanning);
             stopButton.addEventListener('click', stopScanning);
-            resumeButton.addEventListener('click', resumeScanning);
-            
-            // Sound toggle
-            soundToggle.addEventListener('change', function() {
-                soundEnabled = this.checked;
-                soundStatus.textContent = soundEnabled ? 'On' : 'Off';
-            });
             
             // Add click events to test barcodes
             testBarcodeImages.forEach(img => {
                 img.addEventListener('click', function() {
                     const code = this.getAttribute('data-code');
                     const format = this.getAttribute('data-format');
-                    simulateScan(code, format);
+                    displayBarcodeResult(code, format);
+                    statusElement.textContent = 'Test barcode scanned successfully!';
+                    statusElement.className = 'status success';
                 });
             });
             
@@ -588,13 +522,18 @@
                 // Update UI
                 startButton.disabled = true;
                 stopButton.disabled = false;
-                resumeButton.disabled = true;
-                statusElement.textContent = 'Camera active. Point at a code.';
+                statusElement.textContent = 'Camera active. Point at a barcode.';
                 statusElement.className = 'status success';
                 
-                // Start scanning
+                // Start scanning based on detection method
                 scanning = true;
-                startJsQRDetection();
+                if (detectionMethod === 'native') {
+                    startNativeDetection();
+                } else if (detectionMethod === 'quagga') {
+                    startQuaggaDetection();
+                } else {
+                    startJsQRDetection();
+                }
                 
             } catch (error) {
                 console.error('Error starting camera:', error);
@@ -614,6 +553,11 @@
                 scanInterval = null;
             }
             
+            // Stop Quagga if running
+            if (detectionMethod === 'quagga' && typeof Quagga !== 'undefined') {
+                Quagga.stop();
+            }
+            
             // Stop camera stream
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
@@ -625,31 +569,83 @@
             // Update UI
             startButton.disabled = false;
             stopButton.disabled = true;
-            resumeButton.disabled = true;
             statusElement.textContent = 'Scanner stopped.';
             statusElement.className = 'status info';
         }
         
-        // Resume scanning after a successful scan
-        function resumeScanning() {
-            if (!stream) {
-                startScanning();
-                return;
+        // Native BarcodeDetector API method
+        async function startNativeDetection() {
+            if (!scanning) return;
+            
+            try {
+                const barcodeDetector = new BarcodeDetector();
+                scanInterval = setInterval(async () => {
+                    if (!scanning) return;
+                    
+                    try {
+                        const barcodes = await barcodeDetector.detect(video);
+                        if (barcodes.length > 0) {
+                            const barcode = barcodes[0];
+                            displayBarcodeResult(barcode.rawValue, barcode.format);
+                        }
+                    } catch (error) {
+                        console.error('Native detection error:', error);
+                    }
+                }, 1000);
+            } catch (error) {
+                console.error('Error with native detection:', error);
+                // Fall back to jsQR
+                detectionMethod = 'jsqr';
+                startJsQRDetection();
             }
-            
-            // Update UI
-            startButton.disabled = true;
-            stopButton.disabled = false;
-            resumeButton.disabled = true;
-            statusElement.textContent = 'Camera active. Point at another code.';
-            statusElement.className = 'status success';
-            
-            // Resume scanning
-            scanning = true;
-            startJsQRDetection();
         }
         
-        // jsQR library method for code detection
+        // Quagga library method
+        function startQuaggaDetection() {
+            if (!scanning) return;
+            
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: video,
+                    constraints: {
+                        width: 640,
+                        height: 480,
+                        facingMode: "environment"
+                    }
+                },
+                decoder: {
+                    readers: [
+                        "ean_reader",
+                        "ean_8_reader",
+                        "upc_reader",
+                        "upc_e_reader"
+                    ]
+                },
+                locate: true
+            }, function(err) {
+                if (err) {
+                    console.error('Quagga init error:', err);
+                    // Fall back to jsQR
+                    detectionMethod = 'jsqr';
+                    startJsQRDetection();
+                    return;
+                }
+                
+                Quagga.start();
+                
+                Quagga.onDetected(function(result) {
+                    if (!scanning) return;
+                    
+                    const code = result.codeResult.code;
+                    const format = result.codeResult.format;
+                    displayBarcodeResult(code, format);
+                });
+            });
+        }
+        
+        // jsQR library method (primarily for QR codes but can detect some barcodes)
         function startJsQRDetection() {
             if (!scanning) return;
             
@@ -661,45 +657,80 @@
                 canvasContext.drawImage(video, 0, 0, canvas.width, canvas.height);
                 const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
                 
-                // Try to detect QR code
+                // Try to detect QR code or barcode
                 const code = jsQR(imageData.data, imageData.width, imageData.height, {
                     inversionAttempts: "dontInvert",
                 });
                 
                 if (code) {
-                    // Code detected - stop scanning and show result
-                    handleCodeDetected(code.data, "QR Code");
+                    displayBarcodeResult(code.data, "QR Code");
                 }
-            }, 200); // Check every 200ms for responsiveness
-        }
-        
-        // Handle when a code is detected
-        function handleCodeDetected(code, format) {
-            // Stop scanning
-            scanning = false;
-            clearInterval(scanInterval);
-            
-            // Play sound if enabled
-            if (soundEnabled) {
-                playScanSound();
-            }
-            
-            // Update UI
-            stopButton.disabled = true;
-            resumeButton.disabled = false;
-            statusElement.textContent = 'Code detected! Scanner paused.';
-            statusElement.className = 'status success';
-            
-            // Display result with animation
-            displayCodeResult(code, format);
-            
-            // Add visual feedback
-            resultElement.classList.add('pulse');
-            setTimeout(() => {
-                resultElement.classList.remove('pulse');
             }, 500);
         }
         
+        // Display the barcode result
+        function displayBarcodeResult(code, format) {
+            
+            
+            
+            // Format the barcode number for display
+            let formattedCode = code;
+            if (format.includes('ean_13') && code.length === 13) {
+                formattedCode = code.substring(0, 1) + ' ' + 
+                               code.substring(1, 7) + ' ' + 
+                               code.substring(7, 13);
+            } else if (format.includes('upc_a') && code.length === 12) {
+                formattedCode = code.substring(0, 1) + ' ' + 
+                               code.substring(1, 6) + ' ' + 
+                               code.substring(6, 11) + ' ' + 
+                               code.substring(11, 12);
+            }
+            
+            // Format name mapping
+            const formatNames = {
+                'ean_13': 'EAN-13',
+                'ean_8': 'EAN-8',
+                'upc_a': 'UPC-A',
+                'upc_e': 'UPC-E',
+                'code_128': 'Code 128',
+                'code_39': 'Code 39',
+                'qr_code': 'QR Code'
+            };
+            
+            const formatName = formatNames[format] || format;
+            
+            // Update the result display
+            resultElement.innerHTML = `
+                <div class="barcode-result">
+                    <div class="barcode-number">${formattedCode}</div>
+                    <div class="barcode-info">
+                        <p><strong>Format:</strong> <span class="barcode-type">${formatName}</span></p>
+                        <p><strong>Digits:</strong> ${code.length}</p>
+                        <p><strong>Status:</strong> Valid barcode detected</p>
+                    </div>
+                </div>
+            `;
+            
+            statusElement.textContent = 'Barcode successfully scanned!';
+            statusElement.className = 'status success';
+            
+            
+
+            // we need to stop scanning 
+            stopScanning()
+            
+            
+            
+            // In a real application, you would look up product information here
+            lookupProductInfo(code);
+            
+           
+            // sound play
+            playScanSound();
+
+        }
+
+
         // Play scan sound
         function playScanSound() {
             // Reset audio to start and play
@@ -708,33 +739,12 @@
                 console.log('Audio play failed:', e);
             });
         }
+
         
-        // Display the code result
-        function displayCodeResult(code, format) {
-            // Format the code for display
-            let formattedCode = code;
-            if (format.includes('ean_13') && code.length === 13) {
-                formattedCode = code.substring(0, 1) + ' ' + 
-                               code.substring(1, 7) + ' ' + 
-                               code.substring(7, 13);
-            }
-            
-            // Update the result display
-            resultElement.innerHTML = `
-                <div class="barcode-result">
-                    <div class="barcode-number">${formattedCode}</div>
-                    <div class="barcode-info">
-                        <p><strong>Format:</strong> <span class="barcode-type">${format}</span></p>
-                        <p><strong>Content:</strong> ${code}</p>
-                        <p><strong>Status:</strong> Successfully scanned!</p>
-                    </div>
-                </div>
-            `;
-        }
-        
-        // Simulate a scan (for test barcodes)
-        function simulateScan(code, format) {
-            handleCodeDetected(code, format);
+        // Simulate product information lookup
+        function lookupProductInfo(barcode) {
+            console.log('Looking up product info for barcode:', barcode);
+            // This would typically call an API to get product details
         }
         
         // Initialize the scanner when the page loads
