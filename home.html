@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Product Barcode Scanner</title>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -70,6 +72,10 @@
             height: 300px;
             background: #000;
             object-fit: cover;
+        }
+        
+        #canvas {
+            display: none;
         }
         
         .scan-overlay {
@@ -310,6 +316,12 @@
             margin: 10px;
             border: 1px solid #ddd;
             border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        .test-barcodes img:hover {
+            transform: scale(1.05);
+            transition: transform 0.3s;
         }
     </style>
 </head>
@@ -323,6 +335,7 @@
         <div class="scanner-section">
             <div class="scanner-container">
                 <video id="video" playsinline></video>
+                <canvas id="canvas"></canvas>
                 <div class="scan-overlay">
                     <div class="scan-frame">
                         <div class="scan-line"></div>
@@ -340,7 +353,7 @@
                     <li>The scanner will automatically detect the barcode</li>
                     <li>View the scanned barcode number and format</li>
                 </ol>
-                <p><strong>Tip:</strong> Try with the test barcodes below first!</p>
+                <p><strong>Tip:</strong> Click on the test barcodes below to simulate scanning!</p>
             </div>
         </div>
         
@@ -381,11 +394,11 @@
         </div>
         
         <div class="test-barcodes">
-            <h3>Test Barcodes (Try scanning these)</h3>
+            <h3>Test Barcodes (Click to simulate scanning)</h3>
             <div>
-                <img src="https://barcode.tec-it.com/barcode.ashx?data=5901234123457&code=EAN13&dpi=96" alt="EAN-13 Test Barcode">
-                <img src="https://barcode.tec-it.com/barcode.ashx?data=12345670&code=EAN8&dpi=96" alt="EAN-8 Test Barcode">
-                <img src="https://barcode.tec-it.com/barcode.ashx?data=123456789012&code=UPCA&dpi=96" alt="UPC-A Test Barcode">
+                <img src="https://barcode.tec-it.com/barcode.ashx?data=5901234123457&code=EAN13&dpi=96" alt="EAN-13 Test Barcode" data-code="5901234123457" data-format="EAN-13">
+                <img src="https://barcode.tec-it.com/barcode.ashx?data=12345670&code=EAN8&dpi=96" alt="EAN-8 Test Barcode" data-code="12345670" data-format="EAN-8">
+                <img src="https://barcode.tec-it.com/barcode.ashx?data=123456789012&code=UPCA&dpi=96" alt="UPC-A Test Barcode" data-code="123456789012" data-format="UPC-A">
             </div>
         </div>
         
@@ -403,69 +416,72 @@
     </div>
     
     <footer>
-        <p>Product Barcode Scanner &copy; 2023 | Uses modern Barcode Detection API</p>
+        <p>Product Barcode Scanner &copy; 2023 | Uses multiple detection methods for better compatibility</p>
     </footer>
 
     <script>
         // DOM elements
         const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
         const startButton = document.getElementById('startButton');
         const stopButton = document.getElementById('stopButton');
         const resultElement = document.getElementById('result');
         const statusElement = document.getElementById('status');
+        const testBarcodeImages = document.querySelectorAll('.test-barcodes img');
         
         // Variables
         let stream = null;
         let scanning = false;
-        let barcodeDetector = null;
+        let scanInterval = null;
+        let detectionMethod = 'jsqr'; // Default method
         
-        // Check if the browser supports Barcode Detection API
-        async function checkCompatibility() {
-            if (!('BarcodeDetector' in window)) {
-                statusElement.textContent = 'Your browser does not support the Barcode Detection API. Try using Chrome or Edge.';
-                statusElement.className = 'status error';
-                startButton.disabled = true;
-                return false;
-            }
-            
-            // Check if we can get camera access
+        // Check compatibility and initialize
+        function initScanner() {
+            // Check camera access
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 statusElement.textContent = 'Your browser does not support camera access.';
                 statusElement.className = 'status error';
                 startButton.disabled = true;
-                return false;
+                return;
             }
             
-            // Initialize barcode detector
-            try {
-                // Get supported formats
-                const formats = await BarcodeDetector.getSupportedFormats();
-                console.log('Supported barcode formats:', formats);
-                
-                if (formats.length === 0) {
-                    statusElement.textContent = 'No barcode formats supported by your browser.';
-                    statusElement.className = 'status error';
-                    return false;
-                }
-                
-                barcodeDetector = new BarcodeDetector({ formats });
-                statusElement.textContent = `Barcode detector ready. Supported formats: ${formats.join(', ')}`;
-                statusElement.className = 'status info';
-                return true;
-            } catch (error) {
-                console.error('Error initializing barcode detector:', error);
-                statusElement.textContent = 'Error initializing barcode detector.';
+            // Check for BarcodeDetector API (most modern method)
+            if ('BarcodeDetector' in window) {
+                detectionMethod = 'native';
+                statusElement.textContent = 'Using modern Barcode Detection API';
+            } 
+            // Check for Quagga library
+            else if (typeof Quagga !== 'undefined') {
+                detectionMethod = 'quagga';
+                statusElement.textContent = 'Using Quagga barcode library';
+            }
+            // Fallback to jsQR for QR codes (will try to detect barcodes too)
+            else if (typeof jsQR !== 'undefined') {
+                detectionMethod = 'jsqr';
+                statusElement.textContent = 'Using QR code detection (limited barcode support)';
+            } else {
+                statusElement.textContent = 'No barcode detection library available.';
                 statusElement.className = 'status error';
-                return false;
+                startButton.disabled = true;
+                return;
             }
-        }
-        
-        // Initialize the scanner
-        async function initScanner() {
-            if (!await checkCompatibility()) return;
             
+            // Add event listeners
             startButton.addEventListener('click', startScanning);
             stopButton.addEventListener('click', stopScanning);
+            
+            // Add click events to test barcodes
+            testBarcodeImages.forEach(img => {
+                img.addEventListener('click', function() {
+                    const code = this.getAttribute('data-code');
+                    const format = this.getAttribute('data-format');
+                    displayBarcodeResult(code, format);
+                    statusElement.textContent = 'Test barcode scanned successfully!';
+                    statusElement.className = 'status success';
+                });
+            });
+            
+            statusElement.className = 'status info';
         }
         
         // Start the camera and scanning process
@@ -478,8 +494,8 @@
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: { 
                         facingMode: 'environment', // Prefer back camera
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
                     }
                 });
                 
@@ -487,19 +503,33 @@
                 video.setAttribute('playsinline', true);
                 await video.play();
                 
+                // Set up canvas for image processing
+                const videoWidth = video.videoWidth;
+                const videoHeight = video.videoHeight;
+                canvas.width = videoWidth;
+                canvas.height = videoHeight;
+                
                 // Update UI
                 startButton.disabled = true;
                 stopButton.disabled = false;
                 statusElement.textContent = 'Camera active. Point at a barcode.';
                 statusElement.className = 'status success';
                 
-                // Start scanning loop
+                // Start scanning based on detection method
                 scanning = true;
-                scanFrame();
+                if (detectionMethod === 'native') {
+                    startNativeDetection();
+                } else if (detectionMethod === 'quagga') {
+                    startQuaggaDetection();
+                } else {
+                    startJsQRDetection();
+                }
+                
             } catch (error) {
                 console.error('Error starting camera:', error);
                 statusElement.textContent = 'Error accessing camera: ' + error.message;
                 statusElement.className = 'status error';
+                startButton.disabled = false;
             }
         }
         
@@ -507,6 +537,18 @@
         function stopScanning() {
             scanning = false;
             
+            // Clear any intervals
+            if (scanInterval) {
+                clearInterval(scanInterval);
+                scanInterval = null;
+            }
+            
+            // Stop Quagga if running
+            if (detectionMethod === 'quagga' && typeof Quagga !== 'undefined') {
+                Quagga.stop();
+            }
+            
+            // Stop camera stream
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
                 stream = null;
@@ -521,42 +563,110 @@
             statusElement.className = 'status info';
         }
         
-        // Scan for barcodes in the current video frame
-        async function scanFrame() {
-            if (!scanning || !barcodeDetector) return;
+        // Native BarcodeDetector API method
+        async function startNativeDetection() {
+            if (!scanning) return;
             
             try {
-                const barcodes = await barcodeDetector.detect(video);
-                
-                if (barcodes.length > 0) {
-                    // Use the first detected barcode
-                    const barcode = barcodes[0];
-                    displayBarcodeResult(barcode.rawValue, barcode.format);
-                } else {
-                    statusElement.textContent = 'No barcode detected. Try adjusting position or lighting.';
-                    statusElement.className = 'status info';
-                }
+                const barcodeDetector = new BarcodeDetector();
+                scanInterval = setInterval(async () => {
+                    if (!scanning) return;
+                    
+                    try {
+                        const barcodes = await barcodeDetector.detect(video);
+                        if (barcodes.length > 0) {
+                            const barcode = barcodes[0];
+                            displayBarcodeResult(barcode.rawValue, barcode.format);
+                        }
+                    } catch (error) {
+                        console.error('Native detection error:', error);
+                    }
+                }, 1000);
             } catch (error) {
-                console.error('Error detecting barcode:', error);
-                statusElement.textContent = 'Error detecting barcode.';
-                statusElement.className = 'status error';
+                console.error('Error with native detection:', error);
+                // Fall back to jsQR
+                detectionMethod = 'jsqr';
+                startJsQRDetection();
             }
+        }
+        
+        // Quagga library method
+        function startQuaggaDetection() {
+            if (!scanning) return;
             
-            // Continue scanning
-            if (scanning) {
-                setTimeout(scanFrame, 500); // Check every 500ms to reduce CPU usage
-            }
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: video,
+                    constraints: {
+                        width: 640,
+                        height: 480,
+                        facingMode: "environment"
+                    }
+                },
+                decoder: {
+                    readers: [
+                        "ean_reader",
+                        "ean_8_reader",
+                        "upc_reader",
+                        "upc_e_reader"
+                    ]
+                },
+                locate: true
+            }, function(err) {
+                if (err) {
+                    console.error('Quagga init error:', err);
+                    // Fall back to jsQR
+                    detectionMethod = 'jsqr';
+                    startJsQRDetection();
+                    return;
+                }
+                
+                Quagga.start();
+                
+                Quagga.onDetected(function(result) {
+                    if (!scanning) return;
+                    
+                    const code = result.codeResult.code;
+                    const format = result.codeResult.format;
+                    displayBarcodeResult(code, format);
+                });
+            });
+        }
+        
+        // jsQR library method (primarily for QR codes but can detect some barcodes)
+        function startJsQRDetection() {
+            if (!scanning) return;
+            
+            const canvasContext = canvas.getContext('2d');
+            
+            scanInterval = setInterval(() => {
+                if (!scanning || video.readyState !== video.HAVE_ENOUGH_DATA) return;
+                
+                canvasContext.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
+                
+                // Try to detect QR code or barcode
+                const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                    inversionAttempts: "dontInvert",
+                });
+                
+                if (code) {
+                    displayBarcodeResult(code.data, "QR Code");
+                }
+            }, 500);
         }
         
         // Display the barcode result
         function displayBarcodeResult(code, format) {
             // Format the barcode number for display
             let formattedCode = code;
-            if (format === 'ean_13' && code.length === 13) {
+            if (format.includes('ean_13') && code.length === 13) {
                 formattedCode = code.substring(0, 1) + ' ' + 
                                code.substring(1, 7) + ' ' + 
                                code.substring(7, 13);
-            } else if (format === 'upc_a' && code.length === 12) {
+            } else if (format.includes('upc_a') && code.length === 12) {
                 formattedCode = code.substring(0, 1) + ' ' + 
                                code.substring(1, 6) + ' ' + 
                                code.substring(6, 11) + ' ' + 
@@ -595,22 +705,10 @@
             lookupProductInfo(code);
         }
         
-        // Simulate product information lookup (for demonstration)
+        // Simulate product information lookup
         function lookupProductInfo(barcode) {
-            // This would typically call an API to get product details
             console.log('Looking up product info for barcode:', barcode);
-            
-            // Example of what you might do with a real API:
-            /*
-            fetch(`https://api.example.com/products/${barcode}`)
-                .then(response => response.json())
-                .then(data => {
-                    displayProductInfo(data);
-                })
-                .catch(error => {
-                    console.error('Error fetching product info:', error);
-                });
-            */
+            // This would typically call an API to get product details
         }
         
         // Initialize the scanner when the page loads
