@@ -248,6 +248,12 @@
             border: 1px solid #2196f3;
         }
         
+        .status.verifying {
+            background: rgba(255, 152, 0, 0.2);
+            color: #ef6c00;
+            border: 1px solid #ff9800;
+        }
+        
         .supported-formats {
             margin-top: 30px;
             background: #f9f9f9;
@@ -323,6 +329,36 @@
             transform: scale(1.05);
             transition: transform 0.3s;
         }
+        
+        .verification-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            margin-top: 10px;
+        }
+        
+        .verification-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #ddd;
+            transition: background-color 0.3s;
+        }
+        
+        .verification-dot.active {
+            background-color: #4caf50;
+        }
+        
+        .pulse {
+            animation: pulse 0.5s ease-in-out;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
     </style>
 </head>
 <body>
@@ -350,7 +386,7 @@
                     <li>Allow camera access when prompted by your browser</li>
                     <li>Position the barcode inside the scanner frame</li>
                     <li>Ensure good lighting and hold the barcode steady</li>
-                    <li>The scanner will automatically detect the barcode</li>
+                    <li>The scanner will verify the barcode before confirming</li>
                     <li>View the scanned barcode number and format</li>
                 </ol>
                 <p><strong>Tip:</strong> Click on the test barcodes below to simulate scanning!</p>
@@ -370,6 +406,12 @@
                 </svg>
                 Stop Scanner
             </button>
+            <button id="scanAnotherButton" disabled>
+                <svg class="icon" viewBox="0 0 24 24" fill="white">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
+                </svg>
+                Scan Another
+            </button>
         </div>
         
         <div class="result-container">
@@ -387,6 +429,11 @@
                         <p class="barcode-type">Supported formats: EAN-13, EAN-8, UPC-A, UPC-E</p>
                     </div>
                 </div>
+            </div>
+            <div id="verificationIndicator" class="verification-indicator" style="display: none;">
+                <div class="verification-dot"></div>
+                <div class="verification-dot"></div>
+                <div class="verification-dot"></div>
             </div>
             <div id="status" class="status info">
                 Scanner ready. Click "Start Scanner" to begin.
@@ -418,8 +465,7 @@
 
     <!-- this for sound -->
     <audio id="scanSound" preload="auto">
-        <source src="sound.mp3" type="audio/mpeg">
-        <source src="sound.ogg" type="audio/ogg">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-confirmation-tone-2867.mp3" type="audio/mpeg">
     </audio>
 
     <footer>
@@ -432,8 +478,11 @@
         const canvas = document.getElementById('canvas');
         const startButton = document.getElementById('startButton');
         const stopButton = document.getElementById('stopButton');
+        const scanAnotherButton = document.getElementById('scanAnotherButton');
         const resultElement = document.getElementById('result');
         const statusElement = document.getElementById('status');
+        const verificationIndicator = document.getElementById('verificationIndicator');
+        const verificationDots = document.querySelectorAll('.verification-dot');
         const testBarcodeImages = document.querySelectorAll('.test-barcodes img');
 
         // sound element
@@ -445,6 +494,12 @@
         let scanning = false;
         let scanInterval = null;
         let detectionMethod = 'jsqr'; // Default method
+        
+        // Barcode verification variables
+        let lastDetectedCode = null;
+        let verificationCount = 0;
+        const REQUIRED_VERIFICATIONS = 3; // Number of times the same code must be detected
+        let verificationTimeout = null;
         
         // Check compatibility and initialize
         function initScanner() {
@@ -480,15 +535,14 @@
             // Add event listeners
             startButton.addEventListener('click', startScanning);
             stopButton.addEventListener('click', stopScanning);
+            scanAnotherButton.addEventListener('click', resumeScanning);
             
             // Add click events to test barcodes
             testBarcodeImages.forEach(img => {
                 img.addEventListener('click', function() {
                     const code = this.getAttribute('data-code');
                     const format = this.getAttribute('data-format');
-                    displayBarcodeResult(code, format);
-                    statusElement.textContent = 'Test barcode scanned successfully!';
-                    statusElement.className = 'status success';
+                    handleVerifiedBarcode(code, format);
                 });
             });
             
@@ -500,6 +554,9 @@
             try {
                 statusElement.textContent = 'Requesting camera access...';
                 statusElement.className = 'status info';
+                
+                // Reset verification state
+                resetVerification();
                 
                 // Get camera stream
                 stream = await navigator.mediaDevices.getUserMedia({
@@ -523,6 +580,7 @@
                 // Update UI
                 startButton.disabled = true;
                 stopButton.disabled = false;
+                scanAnotherButton.disabled = true;
                 statusElement.textContent = 'Camera active. Point at a barcode.';
                 statusElement.className = 'status success';
                 
@@ -548,10 +606,15 @@
         function stopScanning() {
             scanning = false;
             
-            // Clear any intervals
+            // Clear any intervals and timeouts
             if (scanInterval) {
                 clearInterval(scanInterval);
                 scanInterval = null;
+            }
+            
+            if (verificationTimeout) {
+                clearTimeout(verificationTimeout);
+                verificationTimeout = null;
             }
             
             // Stop Quagga if running
@@ -570,8 +633,48 @@
             // Update UI
             startButton.disabled = false;
             stopButton.disabled = true;
+            scanAnotherButton.disabled = true;
             statusElement.textContent = 'Scanner stopped.';
             statusElement.className = 'status info';
+            
+            // Reset verification state
+            resetVerification();
+        }
+        
+        // Resume scanning after a successful scan
+        function resumeScanning() {
+            if (!stream) {
+                startScanning();
+                return;
+            }
+            
+            // Reset verification state
+            resetVerification();
+            
+            // Update UI
+            startButton.disabled = true;
+            stopButton.disabled = false;
+            scanAnotherButton.disabled = true;
+            statusElement.textContent = 'Camera active. Point at another barcode.';
+            statusElement.className = 'status success';
+            
+            // Resume scanning
+            scanning = true;
+            if (detectionMethod === 'native') {
+                startNativeDetection();
+            } else if (detectionMethod === 'quagga') {
+                startQuaggaDetection();
+            } else {
+                startJsQRDetection();
+            }
+        }
+        
+        // Reset verification state
+        function resetVerification() {
+            lastDetectedCode = null;
+            verificationCount = 0;
+            verificationIndicator.style.display = 'none';
+            verificationDots.forEach(dot => dot.classList.remove('active'));
         }
         
         // Native BarcodeDetector API method
@@ -587,12 +690,12 @@
                         const barcodes = await barcodeDetector.detect(video);
                         if (barcodes.length > 0) {
                             const barcode = barcodes[0];
-                            displayBarcodeResult(barcode.rawValue, barcode.format);
+                            handleBarcodeDetection(barcode.rawValue, barcode.format);
                         }
                     } catch (error) {
                         console.error('Native detection error:', error);
                     }
-                }, 1000);
+                }, 500);
             } catch (error) {
                 console.error('Error with native detection:', error);
                 // Fall back to jsQR
@@ -641,7 +744,7 @@
                     
                     const code = result.codeResult.code;
                     const format = result.codeResult.format;
-                    displayBarcodeResult(code, format);
+                    handleBarcodeDetection(code, format);
                 });
             });
         }
@@ -664,16 +767,102 @@
                 });
                 
                 if (code) {
-                    displayBarcodeResult(code.data, "QR Code");
+                    handleBarcodeDetection(code.data, "QR Code");
                 }
+            }, 300);
+        }
+        
+        // Handle barcode detection with verification
+        function handleBarcodeDetection(code, format) {
+            // If this is the first detection or a different code
+            if (lastDetectedCode !== code) {
+                lastDetectedCode = code;
+                verificationCount = 1;
+                verificationIndicator.style.display = 'flex';
+                verificationDots[0].classList.add('active');
+                verificationDots[1].classList.remove('active');
+                verificationDots[2].classList.remove('active');
+                
+                statusElement.textContent = `Barcode detected. Verifying... (1/${REQUIRED_VERIFICATIONS})`;
+                statusElement.className = 'status verifying';
+                
+                // Set timeout to reset verification if no further detections
+                if (verificationTimeout) {
+                    clearTimeout(verificationTimeout);
+                }
+                verificationTimeout = setTimeout(() => {
+                    resetVerification();
+                    statusElement.textContent = 'Verification timeout. Please try again.';
+                    statusElement.className = 'status error';
+                }, 2000);
+                
+                return;
+            }
+            
+            // Same code detected again
+            verificationCount++;
+            
+            // Update verification indicator
+            if (verificationCount >= 2) {
+                verificationDots[1].classList.add('active');
+            }
+            if (verificationCount >= 3) {
+                verificationDots[2].classList.add('active');
+            }
+            
+            statusElement.textContent = `Barcode detected. Verifying... (${verificationCount}/${REQUIRED_VERIFICATIONS})`;
+            
+            // If we have enough verifications
+            if (verificationCount >= REQUIRED_VERIFICATIONS) {
+                // Clear timeout
+                if (verificationTimeout) {
+                    clearTimeout(verificationTimeout);
+                    verificationTimeout = null;
+                }
+                
+                // Handle the verified barcode
+                handleVerifiedBarcode(code, format);
+            }
+        }
+        
+        // Handle a verified barcode (confirmed after multiple detections)
+        function handleVerifiedBarcode(code, format) {
+            // Stop scanning
+            scanning = false;
+            if (scanInterval) {
+                clearInterval(scanInterval);
+                scanInterval = null;
+            }
+            
+            // Stop Quagga if running
+            if (detectionMethod === 'quagga' && typeof Quagga !== 'undefined') {
+                Quagga.stop();
+            }
+            
+            // Update UI
+            stopButton.disabled = true;
+            scanAnotherButton.disabled = false;
+            statusElement.textContent = 'Barcode successfully scanned and verified!';
+            statusElement.className = 'status success';
+            
+            // Display result with animation
+            displayBarcodeResult(code, format);
+            
+            // Add visual feedback
+            resultElement.classList.add('pulse');
+            setTimeout(() => {
+                resultElement.classList.remove('pulse');
             }, 500);
+            
+            // Play sound
+            playScanSound();
+            
+            // In a real application, you would look up product information here
+            lookupProductInfo(code);
         }
         
         // Display the barcode result
         function displayBarcodeResult(code, format) {
-            
-            
-            
             // Format the barcode number for display
             let formattedCode = code;
             if (format.includes('ean_13') && code.length === 13) {
@@ -711,26 +900,7 @@
                     </div>
                 </div>
             `;
-            
-            statusElement.textContent = 'Barcode successfully scanned!';
-            statusElement.className = 'status success';
-            
-            
-
-            // we need to stop scanning 
-            stopScanning()
-            
-            
-            
-            // In a real application, you would look up product information here
-            lookupProductInfo(code);
-            
-           
-            // sound play
-            playScanSound();
-
         }
-
 
         // Play scan sound
         function playScanSound() {
@@ -741,7 +911,6 @@
             });
         }
 
-        
         // Simulate product information lookup
         function lookupProductInfo(barcode) {
             console.log('Looking up product info for barcode:', barcode);
